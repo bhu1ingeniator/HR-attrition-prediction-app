@@ -1,576 +1,316 @@
+
+# HR Employee Attrition Predictor
+# Built with Streamlit + scikit-learn
+
+#  Import all libraries we need
 import streamlit as st
 import pandas as pd
 import numpy as np
-import joblib
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, confusion_matrix
 from imblearn.over_sampling import SMOTE
+import matplotlib.pyplot as plt
+import seaborn as sns
 import warnings
-warnings.filterwarnings('ignore')
+warnings.filterwarnings('ignore')  # Hide unnecessary warnings
 
-# ─────────────────────────────────────────────
-# PAGE CONFIG
-# ─────────────────────────────────────────────
+
+# PAGE SETUP
 st.set_page_config(
-    page_title="HR Attrition Predictor",
-    page_icon="👥",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="HR Attrition Predictor",  # Title shown on browser tab
+    page_icon="👥",                        # Icon on browser tab
+    layout="wide"                          # Use full screen width
 )
 
-# ─────────────────────────────────────────────
-# CUSTOM CSS
-# ─────────────────────────────────────────────
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
-    html, body, [class*="css"] {
-        font-family: 'Sora', sans-serif;
-    }
-
-    .stApp {
-        background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-        color: #f0f0f0;
-    }
-
-    .main-title {
-        font-size: 2.8rem;
-        font-weight: 700;
-        background: linear-gradient(90deg, #f7971e, #ffd200);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        margin-bottom: 0.2rem;
-    }
-
-    .sub-title {
-        text-align: center;
-        color: #a0a0c0;
-        font-size: 1rem;
-        margin-bottom: 2rem;
-    }
-
-    .metric-card {
-        background: rgba(255,255,255,0.05);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 16px;
-        padding: 1.2rem 1.5rem;
-        text-align: center;
-        backdrop-filter: blur(10px);
-    }
-
-    .metric-number {
-        font-size: 2rem;
-        font-weight: 700;
-        font-family: 'JetBrains Mono', monospace;
-        color: #ffd200;
-    }
-
-    .metric-label {
-        font-size: 0.8rem;
-        color: #a0a0c0;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-
-    .prediction-box-leave {
-        background: linear-gradient(135deg, #ff416c, #ff4b2b);
-        border-radius: 20px;
-        padding: 2rem;
-        text-align: center;
-        animation: pulse 2s infinite;
-    }
-
-    .prediction-box-stay {
-        background: linear-gradient(135deg, #11998e, #38ef7d);
-        border-radius: 20px;
-        padding: 2rem;
-        text-align: center;
-    }
-
-    .prediction-title {
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: white;
-    }
-
-    .prediction-sub {
-        font-size: 1rem;
-        color: rgba(255,255,255,0.85);
-        margin-top: 0.5rem;
-    }
-
-    @keyframes pulse {
-        0% { box-shadow: 0 0 0 0 rgba(255, 65, 108, 0.5); }
-        70% { box-shadow: 0 0 0 15px rgba(255, 65, 108, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(255, 65, 108, 0); }
-    }
-
-    .section-header {
-        font-size: 1.2rem;
-        font-weight: 600;
-        color: #ffd200;
-        border-left: 4px solid #ffd200;
-        padding-left: 0.8rem;
-        margin: 1.5rem 0 1rem 0;
-    }
-
-    .stButton > button {
-        background: linear-gradient(90deg, #f7971e, #ffd200);
-        color: #1a1a2e;
-        font-weight: 700;
-        font-family: 'Sora', sans-serif;
-        border: none;
-        border-radius: 12px;
-        padding: 0.7rem 2rem;
-        font-size: 1rem;
-        width: 100%;
-        transition: all 0.3s ease;
-    }
-
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(247, 151, 30, 0.4);
-    }
-
-    .stSlider > div > div > div {
-        background: #ffd200 !important;
-    }
-
-    div[data-testid="stSidebar"] {
-        background: rgba(15, 12, 41, 0.9);
-        border-right: 1px solid rgba(255,255,255,0.05);
-    }
-
-    .risk-bar-container {
-        background: rgba(255,255,255,0.1);
-        border-radius: 50px;
-        height: 12px;
-        margin: 0.5rem 0;
-        overflow: hidden;
-    }
-
-    .stSelectbox label, .stSlider label, .stNumberInput label {
-        color: #c0c0d0 !important;
-        font-size: 0.85rem !important;
-    }
-
-    .tab-content {
-        padding: 1rem 0;
-    }
-
-    footer {visibility: hidden;}
-    #MainMenu {visibility: hidden;}
-</style>
-""", unsafe_allow_html=True)
+# APP TITLE
+st.title(" HR Employee Attrition Predictor")
+st.write("This app predicts whether an employee is likely to **Leave** or **Stay** in the company.")
+st.write("---")  # Horizontal line
 
 
-# ─────────────────────────────────────────────
-# TRAIN MODEL (cached so it runs only once)
-# ─────────────────────────────────────────────
+
+# LOAD AND TRAIN THE MODEL
+# @st.cache_resource = trains only ONCE, not every time you click
+
 @st.cache_resource
-def train_model():
-    try:
-        # Try loading uploaded CSV from Streamlit
-        df = pd.read_csv('HR-Employee-Attrition.csv')
-    except:
-        # Fallback: generate synthetic data if CSV not found
-        np.random.seed(42)
-        n = 1000
-        df = pd.DataFrame({
-            'Age': np.random.randint(18, 60, n),
-            'Attrition': np.random.choice(['Yes', 'No'], n, p=[0.16, 0.84]),
-            'BusinessTravel': np.random.choice(['Travel_Rarely', 'Travel_Frequently', 'Non-Travel'], n),
-            'DailyRate': np.random.randint(100, 1500, n),
-            'Department': np.random.choice(['Sales', 'Research & Development', 'Human Resources'], n),
-            'DistanceFromHome': np.random.randint(1, 30, n),
-            'Education': np.random.randint(1, 5, n),
-            'EducationField': np.random.choice(['Life Sciences', 'Medical', 'Marketing', 'Technical Degree', 'Other'], n),
-            'EmployeeCount': 1,
-            'EnvironmentSatisfaction': np.random.randint(1, 4, n),
-            'Gender': np.random.choice(['Male', 'Female'], n),
-            'HourlyRate': np.random.randint(30, 100, n),
-            'JobInvolvement': np.random.randint(1, 4, n),
-            'JobLevel': np.random.randint(1, 5, n),
-            'JobRole': np.random.choice(['Sales Executive', 'Research Scientist', 'Laboratory Technician', 'Manager'], n),
-            'JobSatisfaction': np.random.randint(1, 4, n),
-            'MaritalStatus': np.random.choice(['Single', 'Married', 'Divorced'], n),
-            'MonthlyIncome': np.random.randint(1000, 20000, n),
-            'MonthlyRate': np.random.randint(2000, 27000, n),
-            'NumCompaniesWorked': np.random.randint(0, 9, n),
-            'Over18': 'Y',
-            'OverTime': np.random.choice(['Yes', 'No'], n),
-            'PercentSalaryHike': np.random.randint(11, 25, n),
-            'PerformanceRating': np.random.randint(3, 4, n),
-            'RelationshipSatisfaction': np.random.randint(1, 4, n),
-            'StandardHours': 80,
-            'StockOptionLevel': np.random.randint(0, 3, n),
-            'TotalWorkingYears': np.random.randint(0, 40, n),
-            'TrainingTimesLastYear': np.random.randint(0, 6, n),
-            'WorkLifeBalance': np.random.randint(1, 4, n),
-            'YearsAtCompany': np.random.randint(0, 40, n),
-            'YearsInCurrentRole': np.random.randint(0, 18, n),
-            'YearsSinceLastPromotion': np.random.randint(0, 15, n),
-            'YearsWithCurrManager': np.random.randint(0, 17, n),
-        })
+def load_and_train():
 
-    # Drop useless columns
-    df.drop(columns=[c for c in ['EmployeeCount', 'StandardHours', 'Over18', 'EmployeeNumber'] if c in df.columns], inplace=True)
+    # Load the dataset
+    df = pd.read_csv("HR-Employee-Attrition.csv")
 
-    # Encode target
+    # Drop useless columns (same value for every row, adds no information)
+    df.drop(columns=['EmployeeCount', 'StandardHours', 'Over18'], inplace=True)
+
+    # Encode target column: Yes=1 (left), No=0 (stayed)
     le = LabelEncoder()
-    df['Attrition'] = le.fit_transform(df['Attrition'])  # Yes=1, No=0
+    df['Attrition'] = le.fit_transform(df['Attrition'])
 
-    # One-hot encode
+    # Convert all text columns to numbers (One-Hot Encoding)
     df = pd.get_dummies(df, drop_first=True)
     df = df.astype(float)
 
+    # Separate features (X) and target (y)
     X = df.drop('Attrition', axis=1)
     y = df['Attrition']
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # Split: 80% for training, 20% for testing
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
 
+    # Scale the data so all numbers are in the same range
     scaler = StandardScaler()
-    X_train_sc = scaler.fit_transform(X_train)
-    X_test_sc = scaler.transform(X_test)
+    X_train = scaler.fit_transform(X_train)
+    X_test  = scaler.transform(X_test)
 
-    sm = SMOTE(random_state=42)
-    X_train_sc, y_train = sm.fit_resample(X_train_sc, y_train)
+    # SMOTE: Balance the data (only 16% left, 84% stayed — fix this imbalance)
+    smote = SMOTE(random_state=42)
+    X_train, y_train = smote.fit_resample(X_train, y_train)
 
-    model = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)
-    model.fit(X_train_sc, y_train)
+    # Train Random Forest model
+    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
 
-    acc = model.score(X_test_sc, y_test)
+    # Test accuracy
+    y_pred   = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
 
-    return model, scaler, X.columns.tolist(), acc, X_test_sc, y_test
-
-
-model, scaler, feature_cols, model_accuracy, X_test, y_test = train_model()
-
-
-# ─────────────────────────────────────────────
-# HELPER: build input vector
-# ─────────────────────────────────────────────
-def build_input(inputs: dict) -> np.ndarray:
-    row = {col: 0.0 for col in feature_cols}
-    for k, v in inputs.items():
-        if k in row:
-            row[k] = float(v)
-    df_input = pd.DataFrame([row])
-    return scaler.transform(df_input)
+    return model, scaler, X.columns.tolist(), accuracy, X_test, y_test, y_pred
 
 
-# ─────────────────────────────────────────────
+# Run the training function
+model, scaler, feature_cols, accuracy, X_test, y_test, y_pred = load_and_train()
+
+
+
+# SHOW MODEL ACCURACY AT TOP
+st.subheader("📊 Model Performance")
+col1, col2, col3 = st.columns(3)
+col1.metric(" Accuracy",       f"{accuracy * 100:.2f}%")
+col2.metric(" Total Records",  "1,470 Employees")
+col3.metric(" Algorithm",      "Random Forest")
+st.write("---")
+
+
+
 # SIDEBAR — Employee Input Form
-# ─────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("## 🧑‍💼 Employee Details")
-    st.markdown("Fill in the employee information to predict attrition risk.")
-    st.divider()
+st.sidebar.title(" Enter Employee Details")
+st.sidebar.write("Fill details and click **Predict**")
 
-    st.markdown('<div class="section-header">Personal Info</div>', unsafe_allow_html=True)
-    age = st.slider("Age", 18, 60, 30)
-    gender = st.selectbox("Gender", ["Male", "Female"])
-    marital = st.selectbox("Marital Status", ["Single", "Married", "Divorced"])
-    distance = st.slider("Distance from Home (km)", 1, 30, 5)
+# Personal Info
+st.sidebar.subheader(" Personal Info")
+age            = st.sidebar.slider("Age", 18, 60, 30)
+gender         = st.sidebar.selectbox("Gender", ["Male", "Female"])
+marital_status = st.sidebar.selectbox("Marital Status", ["Single", "Married", "Divorced"])
+distance       = st.sidebar.slider("Distance From Home (km)", 1, 30, 5)
 
-    st.markdown('<div class="section-header">Job Info</div>', unsafe_allow_html=True)
-    dept = st.selectbox("Department", ["Sales", "Research & Development", "Human Resources"])
-    job_role = st.selectbox("Job Role", [
-        "Sales Executive", "Research Scientist", "Laboratory Technician",
-        "Manager", "Sales Representative", "Healthcare Representative",
-        "Manufacturing Director", "Human Resources"
-    ])
-    job_level = st.slider("Job Level", 1, 5, 2)
-    overtime = st.selectbox("Works Overtime?", ["Yes", "No"])
-    travel = st.selectbox("Business Travel", ["Travel_Rarely", "Travel_Frequently", "Non-Travel"])
+# Job Info
+st.sidebar.subheader(" Job Info")
+job_level     = st.sidebar.slider("Job Level (1=Junior, 5=Senior)", 1, 5, 2)
+overtime      = st.sidebar.selectbox("Works Overtime?", ["Yes", "No"])
+travel        = st.sidebar.selectbox("Business Travel", ["Travel_Rarely", "Travel_Frequently", "Non-Travel"])
+num_companies = st.sidebar.slider("No. of Companies Worked Before", 0, 9, 1)
 
-    st.markdown('<div class="section-header">Satisfaction Scores (1=Low, 4=High)</div>', unsafe_allow_html=True)
-    job_sat = st.slider("Job Satisfaction", 1, 4, 3)
-    env_sat = st.slider("Environment Satisfaction", 1, 4, 3)
-    wlb = st.slider("Work-Life Balance", 1, 4, 3)
-    job_inv = st.slider("Job Involvement", 1, 4, 3)
-    rel_sat = st.slider("Relationship Satisfaction", 1, 4, 3)
+# Satisfaction Scores
+st.sidebar.subheader(" Satisfaction (1=Low, 4=High)")
+job_satisfaction  = st.sidebar.slider("Job Satisfaction",         1, 4, 3)
+env_satisfaction  = st.sidebar.slider("Environment Satisfaction", 1, 4, 3)
+work_life_balance = st.sidebar.slider("Work Life Balance",        1, 4, 3)
+relationship_sat  = st.sidebar.slider("Relationship Satisfaction",1, 4, 3)
 
-    st.markdown('<div class="section-header">Compensation & Experience</div>', unsafe_allow_html=True)
-    income = st.number_input("Monthly Income (₹)", 1000, 20000, 5000, step=500)
-    years_company = st.slider("Years at Company", 0, 40, 3)
-    total_exp = st.slider("Total Working Years", 0, 40, 5)
-    years_role = st.slider("Years in Current Role", 0, 18, 2)
-    promo = st.slider("Years Since Last Promotion", 0, 15, 1)
-    stock = st.slider("Stock Option Level", 0, 3, 1)
-    num_companies = st.slider("No. of Companies Worked", 0, 9, 1)
-    training = st.slider("Training Times Last Year", 0, 6, 3)
-    salary_hike = st.slider("Percent Salary Hike", 11, 25, 14)
+# Compensation
+st.sidebar.subheader(" Compensation & Experience")
+monthly_income      = st.sidebar.number_input("Monthly Income (₹)", 1000, 20000, 5000, step=500)
+years_at_company    = st.sidebar.slider("Years at Company",           0, 40, 3)
+total_working_years = st.sidebar.slider("Total Working Years",        0, 40, 5)
+years_in_role       = st.sidebar.slider("Years in Current Role",      0, 18, 2)
+years_since_promo   = st.sidebar.slider("Years Since Last Promotion", 0, 15, 1)
+stock_option        = st.sidebar.slider("Stock Option Level",         0, 3, 1)
+training_times      = st.sidebar.slider("Training Times Last Year",   0, 6, 3)
+salary_hike         = st.sidebar.slider("Percent Salary Hike",       11, 25, 14)
 
-    st.divider()
-    predict_btn = st.button("🔍 Predict Attrition Risk")
+st.sidebar.write("---")
+predict_button = st.sidebar.button(" Predict Attrition")
 
 
-# ─────────────────────────────────────────────
-# MAIN CONTENT
-# ─────────────────────────────────────────────
-st.markdown('<div class="main-title">👥 HR Attrition Predictor</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Predict whether an employee is likely to leave the organization</div>', unsafe_allow_html=True)
 
-# Top metrics
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.markdown(f"""<div class="metric-card">
-        <div class="metric-number">{model_accuracy*100:.1f}%</div>
-        <div class="metric-label">Model Accuracy</div>
-    </div>""", unsafe_allow_html=True)
-with col2:
-    st.markdown(f"""<div class="metric-card">
-        <div class="metric-number">1,470</div>
-        <div class="metric-label">Training Records</div>
-    </div>""", unsafe_allow_html=True)
-with col3:
-    st.markdown(f"""<div class="metric-card">
-        <div class="metric-number">35</div>
-        <div class="metric-label">Features Used</div>
-    </div>""", unsafe_allow_html=True)
-with col4:
-    st.markdown(f"""<div class="metric-card">
-        <div class="metric-number">5</div>
-        <div class="metric-label">ML Models Trained</div>
-    </div>""", unsafe_allow_html=True)
+# HELPER FUNCTION — Prepare input for model
+def prepare_input():
+    # Start with all zeros (matching training columns)
+    row = {col: 0.0 for col in feature_cols}
 
-st.markdown("<br>", unsafe_allow_html=True)
+    # Fill in the values entered by user
+    row['Age']                      = age
+    row['DistanceFromHome']         = distance
+    row['JobLevel']                 = job_level
+    row['JobSatisfaction']          = job_satisfaction
+    row['EnvironmentSatisfaction']  = env_satisfaction
+    row['WorkLifeBalance']          = work_life_balance
+    row['RelationshipSatisfaction'] = relationship_sat
+    row['MonthlyIncome']            = monthly_income
+    row['YearsAtCompany']           = years_at_company
+    row['TotalWorkingYears']        = total_working_years
+    row['YearsInCurrentRole']       = years_in_role
+    row['YearsSinceLastPromotion']  = years_since_promo
+    row['StockOptionLevel']         = stock_option
+    row['NumCompaniesWorked']       = num_companies
+    row['TrainingTimesLastYear']    = training_times
+    row['PercentSalaryHike']        = salary_hike
 
-# Tabs
-tab1, tab2, tab3 = st.tabs(["🎯 Prediction", "📊 Model Insights", "📋 Dataset Info"])
+    # One-hot encoded columns
+    if f'Gender_{gender}'              in row: row[f'Gender_{gender}']              = 1
+    if f'MaritalStatus_{marital_status}' in row: row[f'MaritalStatus_{marital_status}'] = 1
+    if overtime == "Yes" and 'OverTime_Yes' in row: row['OverTime_Yes']             = 1
+    if f'BusinessTravel_{travel}'      in row: row[f'BusinessTravel_{travel}']      = 1
 
-# ─── TAB 1: PREDICTION ───
-with tab1:
-    if predict_btn:
-        # Build input dict
-        inputs = {
-            'Age': age,
-            'DistanceFromHome': distance,
-            'JobLevel': job_level,
-            'JobSatisfaction': job_sat,
-            'EnvironmentSatisfaction': env_sat,
-            'WorkLifeBalance': wlb,
-            'JobInvolvement': job_inv,
-            'RelationshipSatisfaction': rel_sat,
-            'MonthlyIncome': income,
-            'YearsAtCompany': years_company,
-            'TotalWorkingYears': total_exp,
-            'YearsInCurrentRole': years_role,
-            'YearsSinceLastPromotion': promo,
-            'StockOptionLevel': stock,
-            'NumCompaniesWorked': num_companies,
-            'TrainingTimesLastYear': training,
-            'PercentSalaryHike': salary_hike,
-            f'Gender_{gender}': 1,
-            f'MaritalStatus_{marital}': 1,
-            f'OverTime_Yes': 1 if overtime == "Yes" else 0,
-            f'BusinessTravel_{travel}': 1,
-        }
+    # Scale and return
+    input_df     = pd.DataFrame([row])
+    input_scaled = scaler.transform(input_df)
+    return input_scaled
 
-        vec = build_input(inputs)
-        pred = model.predict(vec)[0]
-        prob = model.predict_proba(vec)[0]
-        leave_prob = prob[1]
-        stay_prob = prob[0]
 
-        st.markdown("### 🔮 Prediction Result")
+# PREDICTION RESULT
+if predict_button:
 
-        col_pred, col_gauge = st.columns([1, 1])
+    st.subheader(" Prediction Result")
+    input_data  = prepare_input()
+    prediction  = model.predict(input_data)[0]
+    probability = model.predict_proba(input_data)[0]
+    stay_prob  = probability[0] * 100
+    leave_prob = probability[1] * 100
 
-        with col_pred:
-            if pred == 1:
-                st.markdown(f"""
-                <div class="prediction-box-leave">
-                    <div class="prediction-title">⚠️ HIGH RISK — Will Leave</div>
-                    <div class="prediction-sub">This employee is likely to leave the organization</div>
-                    <div style="font-size:2.5rem; font-weight:700; color:white; margin-top:1rem;">{leave_prob*100:.1f}%</div>
-                    <div style="color:rgba(255,255,255,0.8); font-size:0.9rem;">Attrition Probability</div>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div class="prediction-box-stay">
-                    <div class="prediction-title">✅ LOW RISK — Will Stay</div>
-                    <div class="prediction-sub">This employee is likely to stay in the organization</div>
-                    <div style="font-size:2.5rem; font-weight:700; color:white; margin-top:1rem;">{stay_prob*100:.1f}%</div>
-                    <div style="color:rgba(255,255,255,0.8); font-size:0.9rem;">Retention Probability</div>
-                </div>
-                """, unsafe_allow_html=True)
-
-        with col_gauge:
-            st.markdown("#### 📊 Probability Breakdown")
-            st.markdown(f"**Stay:** {stay_prob*100:.1f}%")
-            st.progress(float(stay_prob))
-            st.markdown(f"**Leave:** {leave_prob*100:.1f}%")
-            st.progress(float(leave_prob))
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # Risk level badge
-            if leave_prob < 0.3:
-                risk_color, risk_label = "#38ef7d", "🟢 LOW RISK"
-            elif leave_prob < 0.6:
-                risk_color, risk_label = "#ffd200", "🟡 MEDIUM RISK"
-            else:
-                risk_color, risk_label = "#ff416c", "🔴 HIGH RISK"
-
-            st.markdown(f"""
-            <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:1rem; text-align:center; border: 2px solid {risk_color};">
-                <div style="font-size:1.5rem; font-weight:700; color:{risk_color};">{risk_label}</div>
-                <div style="color:#a0a0c0; font-size:0.85rem; margin-top:0.3rem;">Risk Category</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        # Key factors
-        st.markdown("#### 💡 Key Risk Factors Detected")
-        factors = []
-        if overtime == "Yes": factors.append("⚠️ Works Overtime")
-        if job_sat <= 2: factors.append("⚠️ Low Job Satisfaction")
-        if wlb <= 2: factors.append("⚠️ Poor Work-Life Balance")
-        if env_sat <= 2: factors.append("⚠️ Low Environment Satisfaction")
-        if distance > 20: factors.append("⚠️ High Distance from Home")
-        if income < 3000: factors.append("⚠️ Low Monthly Income")
-        if promo > 5: factors.append("⚠️ No Recent Promotion")
-        if num_companies > 5: factors.append("⚠️ Changed Many Companies")
-
-        if factors:
-            cols = st.columns(min(len(factors), 4))
-            for i, f in enumerate(factors):
-                with cols[i % 4]:
-                    st.markdown(f"""<div style="background:rgba(255,65,108,0.15); border:1px solid rgba(255,65,108,0.3);
-                    border-radius:10px; padding:0.6rem; text-align:center; font-size:0.85rem; color:#ff8fa3;">{f}</div>""",
-                    unsafe_allow_html=True)
-        else:
-            st.success("✅ No major risk factors detected. This employee appears satisfied!")
-
+    # Show result
+    if prediction == 1:
+        st.error(" This employee is likely to **LEAVE** the company!")
     else:
-        st.markdown("""
-        <div style="background:rgba(255,255,255,0.03); border:1px dashed rgba(255,255,255,0.15);
-        border-radius:20px; padding:3rem; text-align:center; color:#a0a0c0;">
-            <div style="font-size:3rem;">👈</div>
-            <div style="font-size:1.2rem; margin-top:1rem;">Fill in employee details in the sidebar</div>
-            <div style="font-size:0.9rem; margin-top:0.5rem;">Then click <strong style="color:#ffd200;">Predict Attrition Risk</strong></div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.success(" This employee is likely to **STAY** in the company!")
 
-# ─── TAB 2: MODEL INSIGHTS ───
+    # Show probabilities
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.write("**Chance of Staying:**")
+        st.progress(int(stay_prob))
+        st.write(f"🟢 Stay: **{stay_prob:.1f}%**")
+    with col_b:
+        st.write("**Chance of Leaving:**")
+        st.progress(int(leave_prob))
+        st.write(f"🔴 Leave: **{leave_prob:.1f}%**")
+
+    # Risk level
+    st.write("---")
+    if leave_prob < 30:
+        st.info("🟢 Risk Level: **LOW** — Employee seems happy!")
+    elif leave_prob < 60:
+        st.warning("🟡 Risk Level: **MEDIUM** — Keep an eye on this employee.")
+    else:
+        st.error("🔴 Risk Level: **HIGH** — Immediate HR attention needed!")
+
+    # Risk factors
+    st.write("---")
+    st.subheader("⚠️ Risk Factors")
+    factors = []
+    if overtime == "Yes":       factors.append("Works Overtime")
+    if job_satisfaction <= 2:   factors.append("Low Job Satisfaction")
+    if work_life_balance <= 2:  factors.append("Poor Work-Life Balance")
+    if env_satisfaction <= 2:   factors.append("Low Environment Satisfaction")
+    if distance > 20:           factors.append("Lives Far From Office")
+    if monthly_income < 3000:   factors.append("Low Monthly Income")
+    if years_since_promo > 5:   factors.append("No Promotion in 5+ Years")
+
+    if factors:
+        for f in factors:
+            st.write(f"•  {f}")
+    else:
+        st.write("✅ No major risk factors found!")
+
+else:
+    st.info(" Fill in the employee details in the **sidebar** and click **Predict Attrition**")
+
+
+
+# CHARTS AND VISUALIZATIONS
+st.write("---")
+st.subheader("📈 Model Insights")
+tab1, tab2, tab3 = st.tabs([" 1.Feature Importance", "2.Confusion Matrix", " 3.ROC Curve"])
+
+
+# Tab 1 — Feature Importance
+with tab1:
+    st.write("**Which features affect attrition the most?**")
+    importances = model.feature_importances_
+    feat_df = pd.DataFrame({
+        'Feature':    feature_cols,
+        'Importance': importances
+    }).sort_values('Importance', ascending=False).head(15)
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.barh(feat_df['Feature'], feat_df['Importance'], color='steelblue')
+    ax.set_xlabel("Importance Score")
+    ax.set_title("Top 15 Important Features")
+    ax.invert_yaxis()
+    plt.tight_layout()
+    st.pyplot(fig)
+    st.write(" Higher bar = More important for prediction")
+
+
+# Tab 2 — Confusion Matrix
 with tab2:
-    col_fi, col_cm = st.columns(2)
+    st.write("**How accurately does the model predict Stay vs Leave?**")
+    cm = confusion_matrix(y_test, y_pred)
+    fig2, ax2 = plt.subplots(figsize=(5, 4))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=['Stay', 'Leave'],
+                yticklabels=['Stay', 'Leave'], ax=ax2)
+    ax2.set_xlabel("Predicted")
+    ax2.set_ylabel("Actual")
+    ax2.set_title("Confusion Matrix")
+    plt.tight_layout()
+    st.pyplot(fig2)
+    st.write(" Top-left = Correct Stay | Bottom-right = Correct Leave")
 
-    with col_fi:
-        st.markdown("#### 🌟 Feature Importance (Top 15)")
-        importances = model.feature_importances_
-        feat_df = pd.DataFrame({
-            'Feature': feature_cols,
-            'Importance': importances
-        }).sort_values('Importance', ascending=False).head(15)
 
-        fig, ax = plt.subplots(figsize=(7, 6))
-        fig.patch.set_facecolor('#1a1a2e')
-        ax.set_facecolor('#1a1a2e')
-        colors = ['#ffd200' if i == 0 else '#f7971e' if i < 3 else '#8888cc' for i in range(len(feat_df))]
-        bars = ax.barh(feat_df['Feature'], feat_df['Importance'], color=colors)
-        ax.set_xlabel('Importance Score', color='#a0a0c0')
-        ax.set_title('Top 15 Features', color='white', fontsize=13)
-        ax.tick_params(colors='#c0c0d0', labelsize=9)
-        ax.spines[:].set_color('#333355')
-        ax.invert_yaxis()
-        plt.tight_layout()
-        st.pyplot(fig)
-
-    with col_cm:
-        st.markdown("#### 🔷 Confusion Matrix")
-        from sklearn.metrics import confusion_matrix
-        y_pred = model.predict(X_test)
-        cm = confusion_matrix(y_test, y_pred)
-        fig2, ax2 = plt.subplots(figsize=(5, 4))
-        fig2.patch.set_facecolor('#1a1a2e')
-        ax2.set_facecolor('#1a1a2e')
-        sns.heatmap(cm, annot=True, fmt='d', cmap='YlOrRd',
-                    xticklabels=['Stay', 'Leave'],
-                    yticklabels=['Stay', 'Leave'], ax=ax2,
-                    annot_kws={"size": 16, "weight": "bold"})
-        ax2.set_xlabel('Predicted', color='#c0c0d0')
-        ax2.set_ylabel('Actual', color='#c0c0d0')
-        ax2.set_title('Confusion Matrix', color='white')
-        ax2.tick_params(colors='#c0c0d0')
-        plt.tight_layout()
-        st.pyplot(fig2)
-
-    # ROC Curve
-    st.markdown("#### 📈 ROC Curve")
+# Tab 3 — ROC Curve
+with tab3:
+    st.write("**How good is the model at separating Stay vs Leave?**")
     from sklearn.metrics import roc_curve, auc
-    probs = model.predict_proba(X_test)[:, 1]
+    probs       = model.predict_proba(X_test)[:, 1]
     fpr, tpr, _ = roc_curve(y_test, probs)
-    roc_auc = auc(fpr, tpr)
-
-    fig3, ax3 = plt.subplots(figsize=(8, 4))
-    fig3.patch.set_facecolor('#1a1a2e')
-    ax3.set_facecolor('#1a1a2e')
-    ax3.plot(fpr, tpr, color='#ffd200', lw=2.5, label=f'ROC Curve (AUC = {roc_auc:.3f})')
-    ax3.plot([0, 1], [0, 1], color='#555577', linestyle='--', label='Random Guess')
-    ax3.fill_between(fpr, tpr, alpha=0.1, color='#ffd200')
-    ax3.set_xlabel('False Positive Rate', color='#a0a0c0')
-    ax3.set_ylabel('True Positive Rate', color='#a0a0c0')
-    ax3.set_title('ROC Curve - Random Forest', color='white')
-    ax3.legend(facecolor='#1a1a2e', edgecolor='#333355', labelcolor='white')
-    ax3.tick_params(colors='#c0c0d0')
-    ax3.spines[:].set_color('#333355')
+    roc_auc     = auc(fpr, tpr)
+    fig3, ax3 = plt.subplots(figsize=(6, 4))
+    ax3.plot(fpr, tpr, color='blue', lw=2, label=f'AUC = {roc_auc:.2f}')
+    ax3.plot([0, 1], [0, 1], color='gray', linestyle='--', label='Random Guess')
+    ax3.set_xlabel("False Positive Rate")
+    ax3.set_ylabel("True Positive Rate")
+    ax3.set_title("ROC Curve")
+    ax3.legend()
     plt.tight_layout()
     st.pyplot(fig3)
+    st.write(f" AUC = {roc_auc:.2f} | Closer to 1.0 = Better model")
 
-# ─── TAB 3: DATASET INFO ───
-with tab3:
-    st.markdown("#### 📋 Dataset Summary")
 
-    col_a, col_b, col_c = st.columns(3)
-    with col_a:
-        st.markdown("""<div class="metric-card">
-            <div class="metric-number">1,470</div>
-            <div class="metric-label">Total Employees</div>
-        </div>""", unsafe_allow_html=True)
-    with col_b:
-        st.markdown("""<div class="metric-card">
-            <div class="metric-number">237</div>
-            <div class="metric-label">Left (16.1%)</div>
-        </div>""", unsafe_allow_html=True)
-    with col_c:
-        st.markdown("""<div class="metric-card">
-            <div class="metric-number">1,233</div>
-            <div class="metric-label">Stayed (83.9%)</div>
-        </div>""", unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("#### 🔑 Key Features")
-    features_info = {
-        "Feature": ["Age", "MonthlyIncome", "OverTime", "JobSatisfaction", "YearsAtCompany",
-                    "WorkLifeBalance", "EnvironmentSatisfaction", "DistanceFromHome", "TotalWorkingYears", "StockOptionLevel"],
-        "Type": ["Numerical", "Numerical", "Categorical", "Ordinal", "Numerical",
-                 "Ordinal", "Ordinal", "Numerical", "Numerical", "Ordinal"],
-        "Impact": ["🟡 Medium", "🔴 High", "🔴 High", "🔴 High", "🟡 Medium",
-                   "🟡 Medium", "🟡 Medium", "🟢 Low", "🟡 Medium", "🟢 Low"]
+# FOOTER
+st.write("<br><br><br>", unsafe_allow_html=True)
+st.markdown(
+    """
+    <style>
+    .footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        text-align: center;
+        padding: 10px;
+        color: #888;
+        font-size: 14px;
+        border-top: 1px solid #eee;
     }
-    st.dataframe(pd.DataFrame(features_info), use_container_width=True, hide_index=True)
+    </style>
 
-    st.markdown("#### 🤖 Models Trained")
-    models_info = {
-        "Model": ["Logistic Regression", "Decision Tree", "Random Forest ⭐", "KNN", "XGBoost"],
-        "Type": ["Linear", "Tree-based", "Ensemble", "Instance-based", "Boosting"],
-        "Speed": ["Fast ⚡", "Fast ⚡", "Medium 🔄", "Slow 🐢", "Fast ⚡"],
-        "Best For": ["Baseline", "Interpretability", "Accuracy", "Local patterns", "Best Overall"]
-    }
-    st.dataframe(pd.DataFrame(models_info), use_container_width=True, hide_index=True)
-
-# Footer
-st.markdown("""
-<div style="text-align:center; color:#555577; font-size:0.8rem; margin-top:3rem; padding:1rem;
-border-top:1px solid rgba(255,255,255,0.05);">
-    Built with ❤️ using Streamlit & scikit-learn | HR Attrition Prediction Project
-</div>
-""", unsafe_allow_html=True)
+    <div class="footer">
+        Built by Bhuvan • HR Attrition Predictor App 
+    </div>
+    """,
+    unsafe_allow_html=True
+)
